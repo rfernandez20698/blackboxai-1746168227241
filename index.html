@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Escape Room Maze Game</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      color: #f9fafb;
+    }
+    h1 {
+      color: #f9fafb;
+      margin-bottom: 20px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+    }
+    #maze {
+      display: grid;
+      grid-template-columns: repeat(7, 60px);
+      grid-template-rows: repeat(7, 60px);
+      gap: 4px;
+      margin-bottom: 20px;
+    }
+    .cell {
+      width: 60px;
+      height: 60px;
+      background-color: #e5e7eb;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      font-size: 32px;
+    }
+    .obstacle {
+      background-color: #ef4444;
+      cursor: pointer;
+    }
+    .solved {
+      background-color: #34d399;
+    }
+    .character {
+      color: #3b82f6;
+    }
+    #questionModal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: rgba(0,0,0,0.6);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    #questionModal.active {
+      display: flex;
+    }
+    #questionBox {
+      background-color: white;
+      padding: 20px;
+      border-radius: 8px;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      color: #111827;
+    }
+    #questionText {
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    #answerInput {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      font-size: 16px;
+      display: none;
+    }
+    #submitAnswer, #cancelAnswer {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+    #submitAnswer {
+      background-color: #3b82f6;
+      color: white;
+      display: none;
+    }
+    #submitAnswer:hover {
+      background-color: #2563eb;
+    }
+    #cancelAnswer {
+      background-color: #e5e7eb;
+      color: #374151;
+    }
+    #cancelAnswer:hover {
+      background-color: #d1d5db;
+    }
+    #feedback {
+      font-weight: 600;
+      margin-top: 5px;
+      min-height: 20px;
+    }
+    #feedback.correct {
+      color: #10b981;
+    }
+    #feedback.incorrect {
+      color: #ef4444;
+    }
+    .option {
+      margin: 5px;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      background-color: #3b82f6;
+      color: white;
+      font-size: 16px;
+    }
+    .option:hover {
+      background-color: #2563eb;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Escape Room Maze Game</h1>
+
+  <div id="maze" aria-label="Maze game grid" role="grid"></div>
+
+  <div id="questionModal" role="dialog" aria-modal="true" aria-labelledby="questionText">
+    <div id="questionBox">
+      <div id="questionText"></div>
+      <input type="text" id="answerInput" aria-label="Answer input" placeholder="Tu respuesta" />
+      <div>
+        <button id="submitAnswer">Enviar</button>
+        <button id="cancelAnswer">Cancelar</button>
+      </div>
+      <div id="feedback" role="alert"></div>
+    </div>
+  </div>
+
+  <script>
+    // Configuración del laberinto: cuadrícula 7x7
+    // 0 = celda vacía, 1 = obstáculo
+    const mazeLayout = [
+      [0, 1, 0, 0, 0, 1, 0],
+      [0, 1, 0, 1, 0, 1, 0],
+      [0, 0, 0, 1, 0, 0, 0],
+      [1, 1, 0, 1, 1, 1, 0],
+      [0, 0, 0, 0, 0, 0, 0],
+      [0, 1, 1, 1, 1, 1, 1],
+      [0, 0, 0, 0, 0, 0, 0],
+    ];
+
+    // Preguntas de cultura general para obstáculos (en español) con opciones
+    const questions = [
+      {
+        question: "¿Cuál es la capital de Francia?",
+        options: ["Madrid", "París", "Roma", "Berlín"],
+        answer: "París"
+      },
+      {
+        question: "¿Quién escribió 'Romeo y Julieta'?",
+        options: ["Cervantes", "Shakespeare", "Gabriel García Márquez", "Pablo Neruda"],
+        answer: "Shakespeare"
+      },
+      {
+        question: "¿Cuál es el planeta más grande del sistema solar?",
+        options: ["Tierra", "Marte", "Júpiter", "Saturno"],
+        answer: "Júpiter"
+      },
+      {
+        question: "¿En qué continente se encuentra Egipto?",
+        options: ["Asia", "África", "Europa", "América"],
+        answer: "África"
+      },
+      {
+        question: "¿Cuál es el símbolo químico del agua?",
+        options: ["O2", "H2O", "CO2", "NaCl"],
+        answer: "H2O"
+      },
+      {
+        question: "¿Quién pintó la Mona Lisa?",
+        options: ["Van Gogh", "Da Vinci", "Picasso", "Rembrandt"],
+        answer: "Da Vinci"
+      },
+      {
+        question: "¿En qué año aterrizó el primer hombre en la luna?",
+        options: ["1965", "1969", "1972", "1959"],
+        answer: "1969"
+      },
+      {
+        question: "¿Cuál es la montaña más alta del mundo?",
+        options: ["K2", "Everest", "Mont Blanc", "Denali"],
+        answer: "Everest"
+      },
+      {
+        question: "¿Qué idioma se habla principalmente en Brasil?",
+        options: ["Español", "Portugués", "Inglés", "Francés"],
+        answer: "Portugués"
+      },
+      {
+        question: "¿Cuál es la moneda de Japón?",
+        options: ["Yen", "Dólar", "Euro", "Peso"],
+        answer: "Yen"
+      }
+    ];
+
+    const mazeElement = document.getElementById('maze');
+    const questionModal = document.getElementById('questionModal');
+    const questionText = document.getElementById('questionText');
+    const answerInput = document.getElementById('answerInput');
+    const submitAnswer = document.getElementById('submitAnswer');
+    const cancelAnswer = document.getElementById('cancelAnswer');
+    const feedback = document.getElementById('feedback');
+
+    const rows = mazeLayout.length;
+    const cols = mazeLayout[0].length;
+
+    // Posición del personaje
+    let charPos = { row: 0, col: 0 };
+    // Posición anterior del personaje para retroceder si la respuesta es incorrecta
+    let prevCharPos = { row: 0, col: 0 };
+
+    // Seguimiento de obstáculos resueltos
+    let solvedObstacles = new Set();
+
+    // Mapeo de obstáculos a preguntas por su índice en mazeLayout
+    let obstaclePositions = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (mazeLayout[r][c] === 1) {
+          obstaclePositions.push({ row: r, col: c });
+        }
+      }
+    }
+
+    // Asignar preguntas a obstáculos
+    let obstacleQuestions = {};
+    obstaclePositions.forEach((pos, idx) => {
+      obstacleQuestions[`${pos.row},${pos.col}`] = questions[idx % questions.length];
+    });
+
+    // Para evitar repetir preguntas incorrectas
+    let askedQuestions = new Set();
+
+    // Renderizar laberinto
+    function renderMaze() {
+      mazeElement.innerHTML = '';
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cell = document.createElement('div');
+          cell.classList.add('cell');
+          cell.setAttribute('role', 'gridcell');
+          cell.setAttribute('aria-rowindex', r + 1);
+          cell.setAttribute('aria-colindex', c + 1);
+
+          if (r === charPos.row && c === charPos.col) {
+            const charSpan = document.createElement('span');
+            charSpan.classList.add('character');
+            charSpan.textContent = '🙂';
+            charSpan.setAttribute('aria-label', 'Personaje jugador');
+            cell.appendChild(charSpan);
+          } else if (mazeLayout[r][c] === 1) {
+            cell.classList.add('obstacle');
+            if (solvedObstacles.has(`${r},${c}`)) {
+              cell.classList.add('solved');
+              cell.classList.remove('obstacle');
+            }
+          }
+
+          mazeElement.appendChild(cell);
+        }
+      }
+    }
+
+    // Verificar si el movimiento es válido
+    function canMoveTo(row, col) {
+      if (row < 0 || row >= rows || col < 0 || col >= cols) return false;
+      if (mazeLayout[row][col] === 1 && !solvedObstacles.has(`${row},${col}`)) return false;
+      return true;
+    }
+
+    // Mostrar modal de pregunta para obstáculo
+    function showQuestion(row, col) {
+      const key = `${row},${col}`;
+      let q = obstacleQuestions[key];
+      if (!q) return;
+
+      // Si la pregunta ya fue hecha y respondida incorrectamente, buscar otra pregunta diferente
+      if (askedQuestions.has(key)) {
+        // Buscar una pregunta diferente que no haya sido respondida correctamente ni preguntada recientemente
+        const availableQuestions = questions.filter((question) => {
+          return !Object.values(obstacleQuestions).includes(question) || !askedQuestions.has(question.question);
+        });
+        if (availableQuestions.length > 0) {
+          q = availableQuestions[Math.floor(Math.random() * availableQuestions.length)];
+          obstacleQuestions[key] = q;
+        }
+      }
+
+      questionText.textContent = q.question;
+      feedback.textContent = '';
+      questionModal.classList.add('active');
+
+      // Eliminar opciones previas si existen
+      const existingOptions = document.querySelectorAll('.option');
+      existingOptions.forEach(opt => opt.remove());
+
+      // Crear botones para opciones
+      q.options.forEach(option => {
+        const btn = document.createElement('button');
+        btn.textContent = option;
+        btn.classList.add('option');
+        btn.addEventListener('click', () => {
+          if (option === q.answer) {
+            feedback.textContent = '¡Correcto! Puedes continuar.';
+            feedback.classList.remove('incorrect');
+            feedback.classList.add('correct');
+            solvedObstacles.add(key);
+            askedQuestions.delete(key);
+            questionModal.classList.remove('active');
+            renderMaze();
+            document.removeEventListener('keydown', keydownHandler);
+          } else {
+            feedback.textContent = 'Respuesta incorrecta. Intenta de nuevo.';
+            feedback.classList.remove('correct');
+            feedback.classList.add('incorrect');
+            askedQuestions.add(key);
+            // Retroceder el personaje a la posición anterior
+            charPos = { ...prevCharPos };
+            renderMaze();
+            // Mostrar otra pregunta diferente
+            showQuestion(row, col);
+          }
+        });
+        questionText.parentNode.appendChild(btn);
+      });
+
+      answerInput.value = '';
+      answerInput.style.display = 'none';
+
+      // Cancelar handler
+      function cancelHandler() {
+        questionModal.classList.remove('active');
+        document.removeEventListener('keydown', keydownHandler);
+      }
+
+      // Manejador de teclado para tecla Escape
+      function keydownHandler(e) {
+        if (e.key === 'Escape') {
+          cancelHandler();
+        }
+      }
+
+      cancelAnswer.onclick = cancelHandler;
+      document.addEventListener('keydown', keydownHandler);
+    }
+
+    // Manejar movimiento del personaje con teclas de flecha
+    function moveCharacter(direction) {
+      let newRow = charPos.row;
+      let newCol = charPos.col;
+
+      switch (direction) {
+        case 'ArrowUp':
+          newRow--;
+          break;
+        case 'ArrowDown':
+          newRow++;
+          break;
+        case 'ArrowLeft':
+          newCol--;
+          break;
+        case 'ArrowRight':
+          newCol++;
+          break;
+      }
+
+      if (newRow < 0 || newRow >= rows || newCol < 0 || newCol >= cols) {
+        return; // Fuera de límites
+      }
+
+      if (mazeLayout[newRow][newCol] === 1 && !solvedObstacles.has(`${newRow},${newCol}`)) {
+        // Guardar posición actual antes de mostrar pregunta
+        prevCharPos = { ...charPos };
+        // Obstáculo encontrado, mostrar pregunta
+        showQuestion(newRow, newCol);
+        return;
+      }
+
+      if (canMoveTo(newRow, newCol)) {
+        charPos = { row: newRow, col: newCol };
+        renderMaze();
+      }
+    }
+
+    // Inicializar juego
+    function init() {
+      renderMaze();
+      window.addEventListener('keydown', (e) => {
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+          e.preventDefault();
+          moveCharacter(e.key);
+        }
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>
